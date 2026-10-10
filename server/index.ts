@@ -236,7 +236,7 @@ if (fs.existsSync(distPath)) {
 }
 
 // Start server when run directly
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`[Veyra AI Backend] Server running on http://localhost:${PORT}`);
     console.log(`[Veyra AI Backend] Gemini API configured: ${geminiService.isConfigured() ? 'YES (' + geminiService.getModelName() + ')' : 'NO'}`);

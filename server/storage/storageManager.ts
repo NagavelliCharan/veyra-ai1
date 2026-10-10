@@ -55,11 +55,14 @@ export class StorageManager {
   private initialized = false;
 
   constructor(customUploadsDir?: string) {
+    const defaultDir = process.env.VERCEL
+      ? path.join('/tmp', 'uploads')
+      : path.resolve(process.cwd(), 'uploads');
     this.uploadsDir = customUploadsDir
       ? path.resolve(customUploadsDir)
       : process.env.UPLOAD_DIR
       ? path.resolve(process.env.UPLOAD_DIR)
-      : path.resolve(process.cwd(), 'uploads');
+      : defaultDir;
     this.metadataFile = path.join(this.uploadsDir, 'metadata.json');
   }
 
