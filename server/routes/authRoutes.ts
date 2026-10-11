@@ -1,4 +1,10 @@
 import express, { type Request, type Response } from 'express';
+import {
+  addSessionAccount,
+  getSessionAccounts,
+  isEmailAllowed,
+  removeSessionAccount,
+} from '../auth/session.ts';
 
 const router = express.Router();
 
@@ -19,11 +25,28 @@ interface GoogleTokenInfo {
   exp?: string;
 }
 
+/** Public sign-in config, read at runtime so the frontend build doesn't need the client ID baked in */
+router.get('/config', (_req: Request, res: Response) => {
+  res.json({ googleClientId: getGoogleClientId() });
+});
+
+/** Account IDs this browser holds a valid session for */
+router.get('/session', (req: Request, res: Response) => {
+  res.json({ accountIds: getSessionAccounts(req).map((a) => a.id) });
+});
+
+/** Signs one account (accountId) or every account (no accountId) out of this browser */
+router.post('/logout', (req: Request, res: Response) => {
+  const accountId = (req.body as { accountId?: unknown })?.accountId;
+  removeSessionAccount(req, res, typeof accountId === 'string' ? accountId : null);
+  res.json({ ok: true });
+});
+
 /**
- * Verifies a "Sign in with Google" ID token and returns the public profile.
+ * Verifies a "Sign in with Google" ID token, adds the account to this browser's signed
+ * session cookie and returns the public profile.
  *
- * Privacy: the token is sent only to Google's tokeninfo endpoint, never stored or logged,
- * and the server keeps no session — the profile lives in the user's browser only.
+ * Privacy: the token is sent only to Google's tokeninfo endpoint and never stored or logged.
  */
 router.post('/google', async (req: Request, res: Response) => {
   const clientId = getGoogleClientId();
@@ -69,6 +92,12 @@ router.post('/google', async (req: Request, res: Response) => {
       return;
     }
 
+    if (!isEmailAllowed(info.email)) {
+      res.status(403).json({ error: `${info.email} is not allowed to use this Veyra AI workspace.` });
+      return;
+    }
+
+    addSessionAccount(req, res, { id: info.sub, email: info.email });
     res.json({
       id: info.sub,
       email: info.email,

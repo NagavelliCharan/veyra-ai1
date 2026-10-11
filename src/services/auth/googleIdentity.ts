@@ -36,7 +36,21 @@ declare global {
 
 const GSI_SCRIPT_URL = 'https://accounts.google.com/gsi/client';
 
-export const GOOGLE_CLIENT_ID: string = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+let clientIdPromise: Promise<string> | null = null;
+
+/** The OAuth client ID, served by the backend at runtime (falls back to the Vite env var) */
+export const fetchGoogleClientId = (): Promise<string> => {
+  if (!clientIdPromise) {
+    clientIdPromise = fetch('/api/auth/config')
+      .then((res) => (res.ok ? res.json() : {}))
+      .then((data: { googleClientId?: string }) => data.googleClientId || import.meta.env.VITE_GOOGLE_CLIENT_ID || '')
+      .catch(() => {
+        clientIdPromise = null;
+        return import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+      });
+  }
+  return clientIdPromise;
+};
 
 let loadPromise: Promise<GoogleAccountsId> | null = null;
 

@@ -31,9 +31,9 @@ export const SignInScreen: React.FC = () => {
               Google sign-in is not set up yet
             </div>
             <p className="text-[11px] text-amber-800/90 leading-relaxed">
-              Add <code className="font-mono bg-amber-100 px-1 rounded">VITE_GOOGLE_CLIENT_ID</code> to the
-              project&apos;s <code className="font-mono bg-amber-100 px-1 rounded">.env</code> file, then restart
-              the frontend and backend servers.
+              Set <code className="font-mono bg-amber-100 px-1 rounded">VITE_GOOGLE_CLIENT_ID</code> in the
+              server&apos;s <code className="font-mono bg-amber-100 px-1 rounded">.env</code> file (or your hosting
+              provider&apos;s environment settings), then restart the backend.
             </p>
           </div>
         )}

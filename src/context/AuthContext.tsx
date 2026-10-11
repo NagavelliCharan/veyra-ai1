@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useRef, useState } from 'react';
-import { disableGoogleAutoSelect, GOOGLE_CLIENT_ID } from '../services/auth/googleIdentity';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { disableGoogleAutoSelect, fetchGoogleClientId } from '../services/auth/googleIdentity';
 import { useToast } from './ToastContext';
 
 export interface UserAccount {
@@ -15,7 +15,10 @@ interface AuthContextType {
   currentUser: UserAccount | null;
   /** All Google accounts added on this device (for the account switcher) */
   accounts: UserAccount[];
+  /** True until the client ID and server session have been checked on startup */
+  isAuthLoading: boolean;
   isGoogleConfigured: boolean;
+  googleClientId: string;
   /** Verifies a Google ID token with the backend and makes that account active */
   signInWithGoogleCredential: (credential: string) => Promise<boolean>;
   switchAccount: (accountId: string) => void;
@@ -63,6 +66,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
+  const [googleClientId, setGoogleClientId] = useState('');
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
   // Latest list for callbacks that outlive a render (the Google sign-in callback)
   const accountsRef = useRef(accounts);
 
@@ -73,6 +79,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAccounts(nextAccounts);
     setActiveId(nextActiveId);
     persist(nextAccounts, nextActiveId);
+  };
+
+  // On startup, keep only accounts the server still holds a valid session for (expired
+  // sessions, a new device, or an email removed from the allowlist all require signing in again)
+  useEffect(() => {
+    let cancelled = false;
+    const init = async () => {
+      const clientId = await fetchGoogleClientId();
+      let validIds: string[] | null = null;
+      try {
+        const res = await fetch('/api/auth/session');
+        if (res.ok) validIds = ((await res.json()) as { accountIds: string[] }).accountIds;
+      } catch {
+        // Backend unreachable: keep local state; API calls will report the problem
+      }
+      if (cancelled) return;
+      setGoogleClientId(clientId);
+      if (validIds) {
+        const ids = validIds;
+        const kept = accountsRef.current.filter((a) => ids.includes(a.id));
+        if (kept.length !== accountsRef.current.length) {
+          const storedActive = (() => {
+            try {
+              return localStorage.getItem(ACTIVE_ACCOUNT_KEY);
+            } catch {
+              return null;
+            }
+          })();
+          const nextActive = kept.some((a) => a.id === storedActive) ? storedActive : kept[0]?.id ?? null;
+          update(kept, nextActive);
+        }
+      }
+      setIsAuthLoading(false);
+    };
+    init();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const endServerSession = (accountId: string | null) => {
+    fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(accountId ? { accountId } : {}),
+    }).catch(() => {
+      // Offline: the cookie still expires on its own
+    });
   };
 
   const signInWithGoogleCredential = async (credential: string): Promise<boolean> => {
@@ -114,6 +169,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = () => {
     if (!currentUser) return;
     disableGoogleAutoSelect();
+    endServerSession(currentUser.id);
     const remaining = accounts.filter((a) => a.id !== currentUser.id);
     // Fall back to another added account if there is one, otherwise show the sign-in screen
     update(remaining, remaining[0]?.id ?? null);
@@ -122,6 +178,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOutAll = () => {
     disableGoogleAutoSelect();
+    endServerSession(null);
     update([], null);
     showToast('Signed out of all accounts', 'info');
   };
@@ -131,7 +188,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         currentUser,
         accounts,
-        isGoogleConfigured: Boolean(GOOGLE_CLIENT_ID),
+        isAuthLoading,
+        isGoogleConfigured: Boolean(googleClientId),
+        googleClientId,
         signInWithGoogleCredential,
         switchAccount,
         signOut,

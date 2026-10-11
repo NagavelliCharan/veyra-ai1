@@ -1,7 +1,7 @@
 import { Loader2 } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { GOOGLE_CLIENT_ID, loadGoogleIdentity } from '../../services/auth/googleIdentity';
+import { loadGoogleIdentity } from '../../services/auth/googleIdentity';
 
 interface GoogleSignInButtonProps {
   /** Called after the account was verified and made active */
@@ -14,7 +14,7 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
   onSignedIn,
   text = 'continue_with',
 }) => {
-  const { signInWithGoogleCredential } = useAuth();
+  const { signInWithGoogleCredential, googleClientId } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'verifying' | 'error'>('loading');
   const [loadError, setLoadError] = useState('');
@@ -31,7 +31,7 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
       .then((gsi) => {
         if (cancelled || !containerRef.current) return;
         gsi.initialize({
-          client_id: GOOGLE_CLIENT_ID,
+          client_id: googleClientId,
           ux_mode: 'popup',
           auto_select: false,
           use_fedcm_for_button: true,
@@ -62,7 +62,7 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [text]);
+  }, [text, googleClientId]);
 
   return (
     <div className="flex flex-col items-center gap-2 min-h-[44px]">

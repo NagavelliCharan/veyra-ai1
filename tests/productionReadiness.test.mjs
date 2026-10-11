@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { authFetch } from './helpers/authSession.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
@@ -86,7 +87,7 @@ async function runProductionAudit() {
   // ------------------------------------------------------------------
   console.log('\n[Audit 4] Server Request Payload Bounds (100kb Body Limit)');
   const largePayload = 'A'.repeat(120 * 1024); // 120 KB
-  const tooLargeRes = await fetch(`${serverBase}/api/chat`, {
+  const tooLargeRes = await authFetch(`${serverBase}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message: largePayload, consentGiven: true }),
@@ -95,10 +96,24 @@ async function runProductionAudit() {
   console.log('  ✓ Body-parser 100kb limit strictly enforced (HTTP 413 Payload Too Large)');
 
   // ------------------------------------------------------------------
+  // AUDIT 4b: Google Sign-In Required for AI and File Endpoints
+  // ------------------------------------------------------------------
+  console.log('\n[Audit 4b] Sign-In Required for Protected Endpoints');
+  for (const [method, endpoint] of [['POST', '/api/chat'], ['GET', '/api/files?projectId=x'], ['GET', '/api/directory?projectId=x']]) {
+    const anonRes = await fetch(`${serverBase}${endpoint}`, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: method === 'POST' ? JSON.stringify({ message: 'Hello AI', consentGiven: true }) : undefined,
+    });
+    assert.equal(anonRes.status, 401, `${method} ${endpoint} without sign-in must return 401`);
+  }
+  console.log('  ✓ Anonymous requests to AI and file endpoints are rejected (HTTP 401)');
+
+  // ------------------------------------------------------------------
   // AUDIT 5: Strict User Consent Enforcement (Zero Unconsented AI Call)
   // ------------------------------------------------------------------
   console.log('\n[Audit 5] User Consent Boundary Enforcement');
-  const unconsentedRes = await fetch(`${serverBase}/api/chat`, {
+  const unconsentedRes = await authFetch(`${serverBase}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message: 'Hello AI', consentGiven: false }),
@@ -113,7 +128,7 @@ async function runProductionAudit() {
   // ------------------------------------------------------------------
   console.log('\n[Audit 6] Error Transparency (No Silent Mock Fallback)');
   // An invalid message payload should return 400, never a fake assistant message
-  const invalidReq = await fetch(`${serverBase}/api/chat`, {
+  const invalidReq = await authFetch(`${serverBase}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message: '', consentGiven: true }),
@@ -153,7 +168,7 @@ async function runProductionAudit() {
   const fileA = new Blob(['Confidential Research Document A'], { type: 'text/plain' });
   formA.append('files', fileA, 'docA.txt');
 
-  const uploadResA = await fetch(`${serverBase}/api/files/upload`, {
+  const uploadResA = await authFetch(`${serverBase}/api/files/upload`, {
     method: 'POST',
     body: formA,
   });
@@ -162,14 +177,14 @@ async function runProductionAudit() {
   const fileIdA = uploadJsonA.files[0].id;
 
   // Request directory for Project B (must NOT contain docA)
-  const dirResB = await fetch(`${serverBase}/api/directory?projectId=${projectB}`);
+  const dirResB = await authFetch(`${serverBase}/api/directory?projectId=${projectB}`);
   assert.equal(dirResB.status, 200);
   const dirJsonB = await dirResB.json();
   const foundInB = dirJsonB.files.some((f) => f.name === 'docA.txt' || f.id === fileIdA);
   assert.equal(foundInB, false, 'Files from Project A must NEVER appear in Project B directory');
 
   // Clean up test file
-  await fetch(`${serverBase}/api/files/${fileIdA}`, { method: 'DELETE' });
+  await authFetch(`${serverBase}/api/files/${fileIdA}`, { method: 'DELETE' });
   console.log('  ✓ Verified strict file isolation: Project B cannot see Project A workspace files');
 
   // ------------------------------------------------------------------
@@ -181,7 +196,7 @@ async function runProductionAudit() {
   const emptyBlob = new Blob([], { type: 'text/plain' });
   emptyForm.append('files', emptyBlob, 'empty.txt');
 
-  const emptyUploadRes = await fetch(`${serverBase}/api/files/upload`, {
+  const emptyUploadRes = await authFetch(`${serverBase}/api/files/upload`, {
     method: 'POST',
     body: emptyForm,
   });
@@ -190,13 +205,13 @@ async function runProductionAudit() {
   assert.equal(emptyUploadJson.files[0].size, 0, 'Zero-byte file must be accepted with size 0');
 
   // Download stream
-  const emptyDownloadRes = await fetch(`${serverBase}/api/files/${emptyUploadJson.files[0].id}/download`);
+  const emptyDownloadRes = await authFetch(`${serverBase}/api/files/${emptyUploadJson.files[0].id}/download`);
   assert.equal(emptyDownloadRes.status, 200);
   const downloadedText = await emptyDownloadRes.text();
   assert.equal(downloadedText.length, 0, 'Downloaded empty file must have 0 length');
 
   // Clean up
-  await fetch(`${serverBase}/api/files/${emptyUploadJson.files[0].id}`, { method: 'DELETE' });
+  await authFetch(`${serverBase}/api/files/${emptyUploadJson.files[0].id}`, { method: 'DELETE' });
   console.log('  ✓ Zero-byte file accepted, stored on persistent disk, and streamed with 0 bytes');
 
   // ------------------------------------------------------------------

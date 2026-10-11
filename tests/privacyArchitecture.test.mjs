@@ -3,6 +3,7 @@ process.env.NODE_ENV = 'test';
 
 import 'fake-indexeddb/auto';
 import assert from 'node:assert/strict';
+import { AUTH_COOKIE } from './helpers/authSession.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
@@ -42,8 +43,8 @@ const baseUrl = `http://127.0.0.1:${port}`;
 async function request(endpoint, options = {}) {
   const url = `${baseUrl}${endpoint}`;
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     ...options,
+    headers: { 'Content-Type': 'application/json', Cookie: AUTH_COOKIE, ...(options.headers || {}) },
   });
   let data;
   try {

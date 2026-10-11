@@ -24,7 +24,7 @@ export const AppLayout: React.FC = () => {
     handleConsentSuccess,
   } = useProjects();
   const { storageMode, isVaultConfigured, isVaultLocked } = usePrivacy();
-  const { currentUser } = useAuth();
+  const { currentUser, isAuthLoading } = useAuth();
 
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -32,6 +32,11 @@ export const AppLayout: React.FC = () => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+
+  // Wait for the session check so a signed-in user doesn't see the sign-in page flash
+  if (isAuthLoading) {
+    return <div className="h-screen w-screen bg-[#fbfaf8]" />;
+  }
 
   // Require a signed-in Google account before showing the workspace
   if (!currentUser) {

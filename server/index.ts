@@ -17,10 +17,13 @@ import { groqService, MissingApiKeyError as GroqMissingApiKeyError } from './gro
 import type { ChatRequestBody, ChatResponseBody, HealthResponseBody } from './types.ts';
 import fileRoutes from './routes/fileRoutes.ts';
 import authRoutes from './routes/authRoutes.ts';
+import { assertSessionConfig, requireAuth } from './auth/session.ts';
 import { storageManager } from './storage/storageManager.ts';
 
 // Load environment variables from .env file
 dotenv.config();
+
+assertSessionConfig();
 
 // Initialize persistent storage manager
 storageManager.init().catch((err) => {
@@ -103,9 +106,13 @@ app.use(
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
+app.use('/api/auth', rateLimiterMiddleware, authRoutes);
+
+// Everything that touches files or the AI key requires a signed-in Google account
+app.use(['/api/folders', '/api/files', '/api/directory', '/api/chat'], requireAuth);
+
 // Mount persistent file and folder routes
 app.use('/api', fileRoutes);
-app.use('/api/auth', rateLimiterMiddleware, authRoutes);
 
 /**
  * Health check endpoint

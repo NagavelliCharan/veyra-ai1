@@ -1,0 +1,27 @@
+# Render Blueprint for Veyra AI: one web service serving the built frontend and the API.
+# Deploy: Render dashboard -> New -> Blueprint -> select this repository.
+services:
+  - type: web
+    name: veyra-ai
+    runtime: node
+    plan: free
+    # --include=dev: Vite and TypeScript are dev dependencies but needed to build the frontend
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "24"
+      - key: SESSION_SECRET
+        generateValue: true
+      # Values below are entered in the Render dashboard during setup (never committed)
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        sync: false
+      - key: VITE_GOOGLE_CLIENT_ID
+        sync: false
+      - key: ALLOWED_EMAILS
+        sync: false

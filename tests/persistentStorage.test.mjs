@@ -10,6 +10,7 @@
 // 8. Live HTTP API endpoint verification against http://localhost:3001
 
 import assert from 'node:assert/strict';
+import { authFetch } from './helpers/authSession.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -237,7 +238,7 @@ async function runTestSuite() {
         const liveProj = 'live-test-' + Date.now();
 
         // 8a: Create folder via API
-        const createFolderRes = await fetch('http://localhost:3001/api/folders', {
+        const createFolderRes = await authFetch('http://localhost:3001/api/folders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ projectId: liveProj, name: 'LiveFolder' }),
@@ -253,7 +254,7 @@ async function runTestSuite() {
         formData.append('files', new Blob(['Live test content'], { type: 'text/plain' }), 'test.txt');
         formData.append('files', new Blob([], { type: 'text/plain' }), 'zero.txt');
 
-        const uploadRes = await fetch('http://localhost:3001/api/files/upload', {
+        const uploadRes = await authFetch('http://localhost:3001/api/files/upload', {
           method: 'POST',
           body: formData,
         });
@@ -266,23 +267,23 @@ async function runTestSuite() {
         assert.equal(zeroUploaded.size, 0, 'Live API uploaded zero-byte file has size 0');
 
         // 8c: Stream download regular file
-        const downloadRes = await fetch(`http://localhost:3001/api/files/${regularUploaded.id}/download`);
+        const downloadRes = await authFetch(`http://localhost:3001/api/files/${regularUploaded.id}/download`);
         assert.equal(downloadRes.status, 200);
         assert.equal(await downloadRes.text(), 'Live test content');
 
         // 8d: Stream download zero-byte file
-        const zeroDownRes = await fetch(`http://localhost:3001/api/files/${zeroUploaded.id}/download`);
+        const zeroDownRes = await authFetch(`http://localhost:3001/api/files/${zeroUploaded.id}/download`);
         assert.equal(zeroDownRes.status, 200);
         assert.equal((await zeroDownRes.arrayBuffer()).byteLength, 0, 'Zero-byte download returns 0 bytes');
 
         // 8e: Get directory
-        const dirRes = await fetch(`http://localhost:3001/api/directory?projectId=${liveProj}&folderId=${apiFolderId}`);
+        const dirRes = await authFetch(`http://localhost:3001/api/directory?projectId=${liveProj}&folderId=${apiFolderId}`);
         assert.equal(dirRes.status, 200);
         const dirData = await dirRes.json();
         assert.equal(dirData.files.length, 2);
 
         // 8f: Cleanup
-        await fetch(`http://localhost:3001/api/folders/${apiFolderId}`, { method: 'DELETE' });
+        await authFetch(`http://localhost:3001/api/folders/${apiFolderId}`, { method: 'DELETE' });
         console.log('  -> PASS: Live HTTP endpoints verified for folders, zero-byte uploads, downloads, and deletion.\n');
       } else {
         console.log('  -> Note: Local server on 3001 not healthy, skipping live HTTP tests.');

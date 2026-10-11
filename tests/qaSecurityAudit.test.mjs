@@ -1,6 +1,7 @@
 // Live QA Security & Verification Audit Script for Veyra AI
 import 'fake-indexeddb/auto';
 import assert from 'node:assert/strict';
+import { authFetch } from './helpers/authSession.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
@@ -414,7 +415,7 @@ async function runAudit() {
     assert.equal(healthData.apiKey, undefined, 'API key must never be exposed on /api/health');
 
     // Test Consent Refusal: Send request with consentGiven: false
-    const noConsentRes = await fetch(`${baseUrl}/api/chat`, {
+    const noConsentRes = await authFetch(`${baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -428,7 +429,7 @@ async function runAudit() {
 
     // Test Oversized Payload Protection (>100kb)
     const hugeMessage = 'A'.repeat(120 * 1024);
-    const payloadRes = await fetch(`${baseUrl}/api/chat`, {
+    const payloadRes = await authFetch(`${baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
